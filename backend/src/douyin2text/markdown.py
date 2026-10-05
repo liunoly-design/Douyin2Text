@@ -1,8 +1,8 @@
 import json,asyncio,hashlib,time
 from pathlib import Path
 from datetime import datetime
-ROOT=Path('/Users/mac/Documents/Personal-Wiki-Media-Service')
-DATA=Path('/Users/mac/Documents/Personal-Wiki-Media')
+from .runtime import DATA
+ROOT=Path(__file__).resolve().parent
 def sha(p):
  h=hashlib.sha256()
  with p.open('rb') as f:
@@ -12,14 +12,14 @@ def stamp(x):
  ms=round(x*1000);return f'{ms//3600000:02}:{ms//60000%60:02}:{ms//1000%60:02}.{ms%1000:03}'
 async def finish(manifest,raw,config,stage):
  vid=manifest['media_id'];translation=None;raw_path=DATA/manifest['files']['raw_transcript']['path'];start=time.monotonic()
- if raw.get('language')=='english' and config.get('translation',{}).get('enabled'):
+ if raw.get('language') in ('english','en') and config.get('translation',{}).get('enabled'):
   stage('transcribing',media_id=vid)
   tr=DATA/'transcripts'/f'{vid}.{config["output_fingerprint"][:12]}.zh.translation.json'
   if tr.exists():
    candidate=json.loads(tr.read_text())
    if candidate.get('source_transcript_sha256')==sha(raw_path) and candidate.get('model_sha256')==config['translation']['sha256'] and candidate.get('quality_revision')==config['translation'].get('quality_revision',2):translation=candidate
   if translation is None:
-   proc=await asyncio.create_subprocess_exec(str(ROOT/'.llm-venv/bin/python'),str(ROOT/'translate_mlx.py'),str(raw_path),str(tr),stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
+   proc=await asyncio.create_subprocess_exec(str(config['translation'].get('python', ROOT/'.llm-venv/bin/python')),str(config['translation'].get('script', ROOT/'translate_mlx.py')),str(raw_path),str(tr),stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
    try:stdout,stderr=await asyncio.wait_for(proc.communicate(),timeout=1800)
    except BaseException:
     proc.kill();await proc.wait();raise
@@ -37,9 +37,9 @@ async def finish(manifest,raw,config,stage):
   body+='\n\n'.join(f"[{stamp(s['start'])} → {stamp(s['end'])}] {s['text']}" for s in translation['segments'])+'\n\n'
  body+=f"## 完整原始转写（{raw.get('language')}）\n\n"
  body+='\n\n'.join(f"[{stamp(s['start'])} → {stamp(s['end'])}] {s['text']}" for s in raw['segments'])
- body+=f"\n\n## 处理与引用\n\n本机 whisper.cpp，{m['asr']['model']}，自动语种识别，Apple Metal。转写模型 SHA-256：{m['asr']['model_sha256']}。\n\n版本：{json.dumps(m['versions'],ensure_ascii=False)}\n\n转写耗时：{m['asr']['elapsed_seconds']} 秒。处理时间：{m['processed_at']}。\n"
+ body+=f"\n\n## 处理与引用\n\n转写引擎：{m['asr'].get('engine', 'whisper.cpp')}，模型：{m['asr']['model']}。转写模型 SHA-256：{m['asr']['model_sha256']}。\n\n版本：{json.dumps(m['versions'],ensure_ascii=False)}\n\n转写耗时：{m['asr']['elapsed_seconds']} 秒。处理时间：{m['processed_at']}。\n"
  if translation:body+=f"\n中文翻译：{translation['model']}，{translation['runtime']}，耗时 {translation['elapsed_seconds']} 秒。权重 SHA-256：{translation['model_sha256']}。翻译来源：{translation['model_source']}。\n"
- body+='\n资料引用：上述抖音规范来源、保存的平台原始响应、完整下载的视频、从视频直接封装的完整音轨、保留的 verbose_json 原始转写。未摘要、未删除口头语、未识别说话人。\n'
+ body+='\n资料引用：上述抖音规范来源、保存的平台原始响应、完整下载的视频、从视频直接封装的完整音轨、保留的原始转写响应与标准化时间段。未摘要、未删除口头语、未识别说话人。\n'
  md=DATA/'transcripts'/f'{vid}.{config["output_fingerprint"][:12]}.md';md.write_text(body)
  m['files']['markdown']={'path':str(md.relative_to(DATA)),'bytes':md.stat().st_size,'sha256':sha(md)}
  m['output_fingerprint']=config['output_fingerprint'];m['derived_processed_at']=datetime.now().astimezone().isoformat();m['timings']['derived_seconds']=round(time.monotonic()-start,3)

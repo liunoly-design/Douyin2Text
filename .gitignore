@@ -11,3 +11,6 @@ venv/
 api-token
 handoff/**/*.zip
 network-verification/
+*.egg-info/
+build/
+dist/

@@ -1,0 +1,22 @@
+{
+  "bind": "127.0.0.1",
+  "base_url": "http://127.0.0.1:8765",
+  "asr_fingerprint": "replace-with-model-and-inference-config-fingerprint",
+  "output_fingerprint": "replace-with-output-and-translation-config-fingerprint",
+  "allow_source_language": false,
+  "model": {
+    "name": "medium",
+    "path": "models/ggml-medium.bin",
+    "source": "https://github.com/ggml-org/whisper.cpp",
+    "sha256": "replace-with-actual-model-sha256"
+  },
+  "versions": {},
+  "providers": {
+    "source": {"name": "f2"},
+    "asr": {
+      "name": "whisper_cpp",
+      "options": {"base_url": "http://127.0.0.1:8767"}
+    }
+  },
+  "translation": {"enabled": false}
+}

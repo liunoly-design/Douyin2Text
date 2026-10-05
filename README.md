@@ -109,12 +109,12 @@ flowchart TB
 
 | 上游项目 | 在 Douyin2Text 中的用途 | 接入位置 |
 | --- | --- | --- |
-| [Johnserf-Seed/f2](https://github.com/Johnserf-Seed/f2) | 获取抖音访客凭据、请求视频详情，取得作者、描述、发布时间、视频候选地址和封面地址 | `server-v1-draft/pipeline_v1.py` 导入 `TokenManager`、`ClientConfManager`、`DouyinCrawler` 和 `PostDetail` |
-| [ggml-org/whisper.cpp](https://github.com/ggml-org/whisper.cpp) | 在 Mac mini 上运行 Whisper 模型，将音轨转为含时间段的文字；交接方案使用 Apple Metal | `server-v1-draft/pipeline_v1.py` 调用本机 `/health` 和 `/inference`，读取 `verbose_json` |
+| [Johnserf-Seed/f2](https://github.com/Johnserf-Seed/f2) | 获取抖音访客凭据、请求视频详情，取得作者、描述、发布时间、视频候选地址和封面地址 | `backend/src/douyin2text/providers/f2.py` 通过 `SourceProvider` 接入 |
+| [ggml-org/whisper.cpp](https://github.com/ggml-org/whisper.cpp) | 在 Mac mini 上运行 Whisper 模型，将音轨转为含时间段的文字；交接方案使用 Apple Metal | `backend/src/douyin2text/providers/whisper_cpp.py` 通过 `TranscriptionProvider` 接入 |
 
 F2 提供多平台下载和接口数据处理能力，本项目仅使用其中的抖音能力。whisper.cpp 是 Whisper 的 C/C++ 实现，支持 Apple Silicon 与 Metal。能力说明分别见 [F2 官方仓库](https://github.com/Johnserf-Seed/f2) 和 [whisper.cpp 官方仓库](https://github.com/ggml-org/whisper.cpp)。
 
-本项目没有把两个上游仓库源码复制进当前仓库，也没有配置 Git 子模块。F2 作为 Python 依赖接入，whisper.cpp 作为单独运行的本机服务接入。实际媒体文件由项目自己的 HTTP 下载代码保存。
+本项目没有把两个上游仓库源码复制进当前仓库，也没有配置 Git 子模块。F2 和 whisper.cpp 分别封装为可替换的视频来源与转写适配器，流水线通过统一接口调用。F2 作为可选 Python 依赖接入，whisper.cpp 作为单独运行的本机服务接入。实际媒体文件由项目自己的 HTTP 下载代码保存。
 
 交接材料记录了以下参考提交，可用于复现当时的接入版本；它们不是当前仓库已锁定的依赖，也不表示已核实服务器正在运行这些版本。
 
@@ -124,6 +124,12 @@ F2 提供多平台下载和接口数据处理能力，本项目仅使用其中�
 | whisper.cpp | `60c0be6ac8fa71b1a2ae2dd938a31a34a508e774` |
 
 FFmpeg、FastAPI、SQLite 和 Node.js 也是运行链路的组成部分；“两个仓库”指下载和识别这两项核心能力的上游来源。
+
+## 模块封装与配置切换
+
+视频来源采用 `SourceProvider`，转写采用 `TranscriptionProvider`。F2 与 whisper.cpp 的库调用和响应解析仅存在于具体适配器中。新增其他库的适配器后，通过服务配置切换，CLI 与 API 无需改动；提供方变化会更新缓存指纹。
+
+安装、新入口、迁移方式和替代适配器约定见 [模块封装说明](docs/providers.md)。
 
 ## 当前代码处理流程
 
@@ -146,12 +152,17 @@ FFmpeg、FastAPI、SQLite 和 Node.js 也是运行链路的组成部分；“两
 | `integration-bundle/scripts/media-service.mjs` | CLI 入口，从私有令牌文件读取认证信息 |
 | `integration-bundle/scripts/lan-acceptance.mjs` | 跨设备局域网验收脚本 |
 | `integration-bundle/test/` | 客户端和翻译契约测试 |
-| `server-v1-draft/api_v1.py` | FastAPI 路由、SQLite 队列、单 Worker、认证、幂等、媒体访问 |
-| `server-v1-draft/pipeline_v1.py` | F2 获取详情、媒体下载、FFmpeg 处理、whisper.cpp 调用 |
-| `server-v1-draft/safe_network.py` | 平台 URL、重定向与公网连接地址校验 |
-| `server-v1-draft/markdown_v1.py` | Markdown 生成和可选翻译分支 |
-| `server-v1-draft/artifacts.py` | 文件哈希、路径检查、版本快照与对外 manifest |
-| `server-v1-draft/test_api_v1.py` | 服务端接口测试，依赖服务端配置和运行环境 |
+| `backend/src/douyin2text/api.py` | FastAPI 路由、SQLite 队列、单 Worker、认证、幂等、媒体访问 |
+| `backend/src/douyin2text/pipeline.py` | 编排来源适配器、媒体下载、FFmpeg 处理、转写适配器与归档 |
+| `backend/src/douyin2text/providers/` | 提供方接口、F2 和 whisper.cpp 适配器、配置工厂与缓存指纹 |
+| `backend/src/douyin2text/runtime.py` | 统一数据目录与配置加载 |
+| `backend/pyproject.toml` | Python 包与运行依赖 |
+| `backend/config.example.json` | 服务与提供方配置模板 |
+| `backend/tests/test_pipeline.py` 与 `test_providers.py` | 可替换模块、缓存、流水线及 API 的隔离测试 |
+| `backend/src/douyin2text/safe_network.py` | 平台 URL、重定向与公网连接地址校验 |
+| `backend/src/douyin2text/markdown.py` | Markdown 生成和可选翻译分支 |
+| `backend/src/douyin2text/artifacts.py` | 文件哈希、路径检查、版本快照与对外 manifest |
+| `backend/tests/integration/test_gateway.py` | 服务端接口测试，依赖服务端配置和运行环境 |
 | `handoff/2026-10-05/package/` | 当日交接快照；日常客户端入口使用 `integration-bundle/` |
 
 ## 当前对外接口
@@ -175,12 +186,12 @@ FFmpeg、FastAPI、SQLite 和 Node.js 也是运行链路的组成部分；“两
 
 ## 数据与运行环境
 
-服务端草稿将数据根目录写为 `/Users/mac/Documents/Personal-Wiki-Media`，并读取 `state/config.json` 和 `state/api-token`。任务数据库为 `state/v1.sqlite3`，模型放在 `models/`；视频、音轨、转写、元数据和工作副本分别使用 `video/`、`audio/`、`transcripts/`、`metadata/`、`tmp/`。
+服务端默认数据根目录为 `/Users/mac/Documents/Personal-Wiki-Media`，可用 `DOUYIN2TEXT_DATA_DIR` 调整；配置路径可用 `DOUYIN2TEXT_CONFIG` 调整。默认读取 `state/config.json` 和 `state/api-token`。任务数据库为 `state/v1.sqlite3`，模型放在 `models/`；视频、音轨、转写、元数据和工作副本分别使用 `video/`、`audio/`、`transcripts/`、`metadata/`、`tmp/`。
 
 运行前需要准备以下环境：
 
 - 客户端使用 Node.js 24 或更高版本，无新增第三方 Node 依赖。
-- 服务端需要 Python 环境及 F2、FastAPI、Uvicorn、httpx、httpcore、Pydantic、psutil 等依赖；仓库尚无完整依赖锁定文件。
+- 服务端使用 Python 3.11 或更高版本，通过 `backend/pyproject.toml` 安装 FastAPI、Uvicorn、httpx、httpcore、Pydantic、psutil。F2 是可选提供方依赖；尚无完整生产依赖锁定文件。
 - FFmpeg 与 ffprobe 当前使用 `/opt/homebrew/bin/` 下的路径。
 - whisper.cpp 需要单独编译或安装、准备模型并启动本机 `127.0.0.1:8767` 服务。
 - 数据目录、配置和私有令牌需要预先准备。交接方案采用 launchd 常驻，但仓库未收录完整启动配置。
@@ -223,7 +234,7 @@ node scripts/media-service.mjs playback MEDIA_ID video
 
 客户端契约测试可在 `integration-bundle/` 内运行 `npm test`。它使用本机测试接口验证客户端行为；实际下载、模型识别与跨设备通信还需按契约单独验收。
 
-要将当前草稿整理成可直接部署的版本，还需补齐依赖锁定、配置模板、目录初始化、whisper-server 和网关启动配置，以及可选翻译脚本。当前 v1 对超 30 分钟或超 1 GiB 的媒体要求人工确认，也没有提供独立的任务重试或取消接口。
+已提供 Python 包、配置模板及可替换提供方接口。完整部署仍需补齐依赖锁定、目录初始化、whisper-server 和网关常驻配置，以及翻译脚本。当前 v1 对超 30 分钟或超 1 GiB 的媒体要求人工确认，也没有提供独立的任务重试或取消接口。
 
 目标架构建议分步落地：
 

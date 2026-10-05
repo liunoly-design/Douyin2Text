@@ -73,7 +73,7 @@ JSON UTF-8，未知新增字段可忽略。ID 匹配 `[A-Za-z0-9_-]{1,128}`。�
 
 ## 客户端与联调
 
-仓库 `src/media-service-client.js` 为本机客户端，`scripts/media-service.mjs` 为命令入口。Node >=24，无新增第三方依赖。环境变量 MEDIA_SERVICE_URL、MEDIA_SERVICE_TOKEN_FILE。命令：
+仓库 `src/media-service-client.js` 为本机客户端，`scripts/media-service.mjs` 为命令入口。Node >=24，无新增第三方依赖。转写引擎名称为非空字符串；默认 whisper.cpp，也支持符合统一结果格式的替代引擎，模型与 SHA-256 校验要求保持不变。环境变量 MEDIA_SERVICE_URL、MEDIA_SERVICE_TOKEN_FILE。命令：
 
 ```sh
 node scripts/media-service.mjs health

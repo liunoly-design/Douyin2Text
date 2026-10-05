@@ -22,9 +22,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from artifacts import DATA, safe_path, snapshot, public_manifest, valid_files, digest
-from pipeline_v1 import CONFIG, process, LoginRequired, ConfirmationRequired
-from safe_network import validate_url
+from .artifacts import DATA, safe_path, snapshot, public_manifest, valid_files, digest
+from .pipeline import CONFIG, process, LoginRequired, ConfirmationRequired
+from .safe_network import validate_url
+from .providers.registry import asr_provider
 
 DB = DATA / 'state' / 'v1.sqlite3'
 WORKER_LOCK = DATA / 'state' / 'worker.lock'
@@ -218,11 +219,7 @@ async def request_limits(request, call_next):
     return response
 
 async def asr_ready():
-    try:
-        async with httpx.AsyncClient(timeout=2, trust_env=False) as c:
-            return (await c.get('http://127.0.0.1:8767/health')).status_code == 200
-    except httpx.HTTPError:
-        return False
+    return await asr_provider(CONFIG).ready()
 
 @app.get('/health', dependencies=[Depends(auth)])
 async def health(request: Request):
@@ -326,7 +323,7 @@ def media_response(m, kind):
             fail(409, 'INTEGRITY_FAILURE', 'Media size mismatch')
     except (ValueError, OSError):
         fail(404, 'NOT_FOUND', 'Media unavailable')
-    from artifacts import mime
+    from .artifacts import mime
     return FileResponse(path, media_type=mime(path, kind), headers={'ETag': '"' + record['sha256'] + '"', 'Accept-Ranges': 'bytes'})
 
 @app.api_route('/v1/media/{mid}/{kind}', methods=['GET', 'HEAD'], dependencies=[Depends(auth)])

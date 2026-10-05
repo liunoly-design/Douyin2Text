@@ -49,7 +49,7 @@ export class MediaServiceClient {
   if(source?.platform!=='douyin'||!/^\d{10,24}$/.test(source.id??'')||typeof source.url!=='string'||!nullableText(source.title)||!nullableText(source.author)||!(source.published_at===null||typeof source.published_at==='string'&&Number.isFinite(Date.parse(source.published_at)))||!(source.duration_seconds===null||Number.isFinite(source.duration_seconds)&&source.duration_seconds>=0))throw Error('Media service invalid source metadata');
   let sourceURL;try{sourceURL=new URL(source.url);}catch{throw Error('Media service invalid source URL');}
   if(sourceURL.protocol!=='https:'||sourceURL.username||sourceURL.password||!['douyin.com','www.douyin.com','v.douyin.com','iesdouyin.com','www.iesdouyin.com'].includes(sourceURL.hostname))throw Error('Media service invalid source URL');
-  if(asr?.engine!=='whisper.cpp'||typeof asr.model!=='string'||!asr.model||!/^[a-f0-9]{64}$/.test(asr.model_sha256??'')||typeof asr.language!=='string'||!asr.language)throw Error('Media service invalid transcription metadata');
+  if(typeof asr?.engine!=='string'||!asr.engine||typeof asr.model!=='string'||!asr.model||!/^[a-f0-9]{64}$/.test(asr.model_sha256??'')||typeof asr.language!=='string'||!asr.language)throw Error('Media service invalid transcription metadata');
   if(asr.language!=='zh'){
    const tr=manifest.translation;
    if(tr?.kind!=='derived_machine_translation'||tr.source_language!==asr.language||tr.target_language!=='zh'||typeof tr.model!=='string'||!tr.model||!/^[a-f0-9]{64}$/.test(tr.model_sha256??'')||tr.coverage?.all_source_segments_present!==true||!Number.isSafeInteger(tr.coverage.source_segments)||tr.coverage.source_segments<=0)throw Error('Media service Chinese translation missing or incomplete');

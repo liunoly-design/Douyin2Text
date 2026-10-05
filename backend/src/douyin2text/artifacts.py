@@ -7,7 +7,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-DATA = Path('/Users/mac/Documents/Personal-Wiki-Media')
+from .runtime import DATA
 
 def digest(path):
     h = hashlib.sha256()
@@ -110,13 +110,13 @@ def public_manifest(m, job_id):
         'source': {'platform': 'douyin', 'id': m['media_id'], 'url': m['canonical_url'], 'share_url': m['original_share_url'],
                    'title': m.get('title'), 'description': m.get('description'), 'author': m.get('author'),
                    'published_at': m.get('published_at'), 'duration_seconds': m.get('duration_seconds')},
-        'transcription': {'engine': 'whisper.cpp', 'model': m['asr']['model'], 'model_sha256': m['asr']['model_sha256'],
+        'transcription': {'engine': m['asr'].get('engine', 'whisper.cpp'), 'model': m['asr']['model'], 'model_sha256': m['asr']['model_sha256'],
                           'language': language, 'requested_language': 'zh', 'fingerprint': m['asr']['fingerprint'],
                           'elapsed_seconds': m['asr'].get('elapsed_seconds'), 'peak_server_rss_bytes': m['asr'].get('peak_server_rss_bytes')},
         'markdown': {'sha256': m['files']['markdown']['sha256']},
         'media': {k: {'path': f'/v1/media/{mid}/{k}', 'sha256': m['files'][k]['sha256'], 'bytes': m['files'][k]['bytes'],
                       'mime': mime(safe_path(m['files'][k]['path']), k)} for k in ('video', 'audio', 'cover')},
-        'versions': m.get('versions'), 'validation': m.get('validation'), 'timings': m.get('timings'),
+        'source_provider': m.get('source_provider', 'f2'), 'versions': m.get('versions'), 'validation': m.get('validation'), 'timings': m.get('timings'),
         'processed_at': m.get('processed_at'),
     }
     if m.get('translation'):

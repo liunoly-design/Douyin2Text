@@ -8,10 +8,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import os
+if os.environ.get("DOUYIN2TEXT_RUN_DEPLOYMENT_TESTS") != "1":
+    raise unittest.SkipTest("Requires a prepared deployment; set DOUYIN2TEXT_RUN_DEPLOYMENT_TESTS=1")
+
 from fastapi.testclient import TestClient
-import api_v1 as api
-from artifacts import DATA, safe_path
-from safe_network import validate_url, PublicBackend
+from douyin2text import api
+from douyin2text.artifacts import DATA, safe_path
+from douyin2text.safe_network import validate_url, PublicBackend
 
 class GatewayTests(unittest.TestCase):
     @classmethod
